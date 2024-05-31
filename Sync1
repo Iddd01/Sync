@@ -1,0 +1,96 @@
+Option Explicit
+
+Private WithEvents objCnn As ADODB.Connection
+Private blnExitApp As Boolean
+
+Private Sub Cmd_Cancel_Click()
+    If Not objCnn Is Nothing Then
+        objCnn.Cancel
+    End If
+End Sub
+
+Private Sub Cmd_Connect_Click()
+    If objCnn Is Nothing Then
+        Const strCnnStr As String = "Driver={MySQL ODBC 8.4 UNICODE Driver};Server=server;Database=database;User=user;Password=password;"
+        Set objCnn = New ADODB.Connection
+        With objCnn
+            .ConnectionString = strCnnStr
+            .Open Options:=ConnectOptionEnum.adAsyncConnect
+            Lbl_Notification.Caption = "Connecting to server..."
+            Cmd_Connect.Enabled = False
+            Cmd_Cancel.Enabled = True
+        End With
+    End If
+End Sub
+
+Private Sub Cmd_Disconnect_Click()
+    If Not objCnn Is Nothing Then
+        If objCnn.State = adStateOpen Then objCnn.Close
+    End If
+End Sub
+
+Private Sub objCnn_ConnectComplete(ByVal pError As ADODB.Error, adStatus As ADODB.EventStatusEnum, ByVal pConnection As ADODB.Connection)
+    If adStatus = adStatusOK Then
+        If pConnection.State = adStateConnecting Then
+            Cmd_Connect.Enabled = False
+            Lbl_Notification.Caption = "Connecting to server..."
+            Cmd_Cancel.Enabled = True
+        ElseIf pConnection.State = adStateOpen Then
+            Lbl_Notification.Caption = "Connected to server."
+            Cmd_Connect.Enabled = False
+            Cmd_Disconnect.Enabled = True
+            Cmd_Execute.Enabled = True
+            Cmd_Cancel.Enabled = False
+            Set objCnn = pConnection
+        ElseIf pConnection.State = adStateClosed Then
+            Lbl_Notification.Caption = "Failed to connect to server."
+            Cmd_Connect.Enabled = True
+            Cmd_Disconnect.Enabled = False
+            Cmd_Execute.Enabled = False
+            Cmd_Cancel.Enabled = False
+            Set pConnection = Nothing
+            Set objCnn = Nothing
+        End If
+    ElseIf adStatus = adStatusErrorsOccurred Then
+        Lbl_Notification.Caption = pError.Description
+        Cmd_Cancel.Enabled = False
+        Cmd_Connect.Enabled = True
+        Set pConnection = Nothing
+        Set objCnn = Nothing
+    ElseIf adStatus = adStatusCancel Then
+        Lbl_Notification.Caption = "Canceling connection..."
+        Cmd_Cancel.Enabled = False
+    End If
+    adStatus = adStatusUnwantedEvent
+End Sub
+
+Private Sub objCnn_Disconnect(adStatus As ADODB.EventStatusEnum, ByVal pConnection As ADODB.Connection)
+    If adStatus = adStatusOK Then
+        If blnExitApp = False Then
+            Lbl_Notification.Caption = "Disconnected from server."
+        End If
+        Cmd_Connect.Enabled = True
+        Cmd_Disconnect.Enabled = False
+        Cmd_Execute.Enabled = False
+        Cmd_Cancel.Enabled = False
+        Set pConnection = Nothing
+        Set objCnn = Nothing
+    End If
+End Sub
+
+Private Sub UserForm_Initialize()
+    Txt_DateTime.Value = CStr(Date)
+    Cmd_Connect.Enabled = True
+    Cmd_Disconnect.Enabled = False
+    Cmd_Execute.Enabled = False
+    Cmd_Cancel.Enabled = False
+End Sub
+
+Private Sub UserForm_Terminate()
+    If Not objCnn Is Nothing Then
+        If objCnn.State = adStateOpen Then
+            blnExitApp = True
+            objCnn.Close
+        End If
+    End If
+End Sub
